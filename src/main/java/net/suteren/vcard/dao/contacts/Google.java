@@ -370,7 +370,7 @@ public class Google {
 	};
 
 	private static final String DEFAULT_FEED = "http://www.google.com/m8/feeds/";
-	private static final String DEFAULT_PROJECTION = "thin";
+	private static final String DEFAULT_PROJECTION = "full";
 
 	private ContactsService service;
 	private ContactModelFactory cmf = Pim.getContactModelFactory();
@@ -389,12 +389,17 @@ public class Google {
 	public List<ContactEntry> getGoogleContacts(String query)
 			throws IOException, ServiceException {
 
-		String url = feedUrlBase; // + "?q=" + URLEncoder.encode(query,
+		String url = feedUrlBase + "?"+"max-results=10000"; // + "q=" + URLEncoder.encode(query,
 		// "UTF-8");
 		URL feedUrl = new URL(url);
-
+		log.debug("Feed URL: " + feedUrl);
 		ContactFeed resultFeed = service.getFeed(feedUrl, ContactFeed.class);
-		return resultFeed.getEntries();
+		resultFeed.setTotalResults(2000);
+		resultFeed.setStartIndex(0);
+		List<ContactEntry> result = resultFeed.getEntries();
+		log.debug("Google contacts count: " + result.size() + "/"
+				+ resultFeed.getTotalResults());
+		return result;
 
 	}
 
