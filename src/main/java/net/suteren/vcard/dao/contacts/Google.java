@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -394,8 +395,7 @@ public class Google {
 		URL feedUrl = new URL(url);
 		log.debug("Feed URL: " + feedUrl);
 		ContactFeed resultFeed = service.getFeed(feedUrl, ContactFeed.class);
-		resultFeed.setTotalResults(2000);
-		resultFeed.setStartIndex(0);
+		resultFeed.setTotalResults(5000);
 		List<ContactEntry> result = resultFeed.getEntries();
 		log.debug("Google contacts count: " + result.size() + "/"
 				+ resultFeed.getTotalResults());
