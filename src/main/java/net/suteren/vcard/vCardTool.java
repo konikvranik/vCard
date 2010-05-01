@@ -3,6 +3,7 @@ package net.suteren.vcard;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.net.URL;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -25,6 +26,10 @@ import net.wimpi.pim.contact.model.Contact;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gdata.data.PlainTextConstruct;
+import com.google.gdata.data.TextConstruct;
+import com.google.gdata.data.contacts.ContactEntry;
+import com.google.gdata.data.extensions.PhoneNumber;
 import com.google.gdata.util.AuthenticationException;
 import com.google.gdata.util.ServiceException;
 import com.google.gdata.util.common.util.Base64;
@@ -36,12 +41,14 @@ public class vCardTool {
 
 	}
 	private static Logger log = LoggerFactory.getLogger(vCardTool.class);
+	private char[] pwd;
+	private String username;
+	private Google g;
 
-	public static void main(String[] args) throws IOException,
-			Base64DecoderException, InvalidKeyException,
+	vCardTool() throws IOException, InvalidKeyException,
 			NoSuchAlgorithmException, NoSuchPaddingException,
-			IllegalBlockSizeException, BadPaddingException {
-
+			IllegalBlockSizeException, BadPaddingException,
+			Base64DecoderException, AuthenticationException {
 		Properties props = System.getProperties();
 
 		InputStream vcp = vCardTool.class.getClassLoader().getResourceAsStream(
@@ -49,25 +56,66 @@ public class vCardTool {
 
 		props.load(vcp);
 
-		String username = props.getProperty("google.username");
+		username = props.getProperty("google.username");
+
+		pwd = decodePassword(props.getProperty("google.password"), username);
+
+		g = new Google(username, pwd);
+
+	}
+
+	public static void main(String[] args) throws IOException,
+			Base64DecoderException, InvalidKeyException,
+			NoSuchAlgorithmException, NoSuchPaddingException,
+			IllegalBlockSizeException, BadPaddingException, ServiceException {
 
 		vCardTool vct = new vCardTool();
 
-		char[] pwd = vct.decodePassword(props.getProperty("google.password"),
-				username);
+		List<ContactEntry> entries = vct.getContactEntriesFromGoogle();
+		for (ContactEntry ce : entries) {
+			boolean update = false;
+			URL etditUrl;
+			if (ce.getTitle() != null) {
+				TextConstruct title = ce.getTitle();
+				String name = title.getPlainText();
+				if (name.matches(",.*,\\s*$")) {
+					name = name.replaceAll("\\s*,\\s*", " ");
+					name = name.trim();
+					update = true;
+				} else if (name.matches(",.*[^,]\\s*$")) {
+					String[] x = name.split(",", 2);
+					name = x[1] + " " + x[0];
+					update = true;
+				}
+				if (update) {
+					log.warn("Updating name " + ce.getTitle().getPlainText()
+							+ " to " + name);
+					ce.setTitle(new PlainTextConstruct(name));
+				}
+			}
+			List<PhoneNumber> pn = ce.getPhoneNumbers();
+			for (PhoneNumber p : pn) {
+				String n = p.getPhoneNumber();
+				n = n.trim();
 
-		List<Contact> originalContacts;
-		try {
-			originalContacts = vct.getContactsFromGoogle(username, pwd);
-			log.info("Count of original contacts: " + originalContacts.size());
-			List<Contact> cleanedContacts = vct
-					.cleanupContacts(originalContacts);
-			log.info("Count of cleaned contacts: " + originalContacts.size());
-			// VCF.saveAddressbook(cleanedContacts, System.out);
-		} catch (IOException e) {
-			log.error("Failed to get contacts from Google", e);
-		} catch (ServiceException e) {
-			log.error("Failed to get contacts from Google", e);
+				if (n.matches("^420")) {
+					n = "+" + n;
+				}
+				if (n.matches("^+?(\\d|\\s)+$")) {
+					n = n.replaceAll("\\s", "");
+				}
+				if (n != null && !n.equals(p.getPhoneNumber())) {
+					log.warn("Updating " + ce.getTitle().getPlainText()
+							+ " phone " + p.getPhoneNumber() + " to " + n);
+					p.setPhoneNumber(n);
+				}
+				update = true;
+			}
+			if (update) {
+				vct.updateGoogleContact(ce);
+
+			}
+
 		}
 
 	}
@@ -106,10 +154,20 @@ public class vCardTool {
 
 	}
 
-	private List<Contact> getContactsFromGoogle(String string, char[] pwd)
+	private List<ContactEntry> getContactEntriesFromGoogle()
 			throws IOException, ServiceException {
-		Google g = new Google(string, pwd);
+		return g.getGoogleContacts("");
+	}
+
+	private List<Contact> getContactsFromGoogle() throws IOException,
+			ServiceException {
 		return g.getPimContacts("");
+	}
+
+	private ContactEntry updateGoogleContact(ContactEntry ce)
+			throws IOException, ServiceException {
+		return g.updateContact(ce);
+
 	}
 
 	public List<Contact> cleanupContacts(List<Contact> originalContacts) {

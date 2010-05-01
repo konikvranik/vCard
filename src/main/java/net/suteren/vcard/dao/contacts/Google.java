@@ -3,6 +3,7 @@ package net.suteren.vcard.dao.contacts;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Date;
@@ -390,7 +391,8 @@ public class Google {
 	public List<ContactEntry> getGoogleContacts(String query)
 			throws IOException, ServiceException {
 
-		String url = feedUrlBase + "?"+"max-results=10000"; // + "q=" + URLEncoder.encode(query,
+		String url = feedUrlBase + "?" + "max-results=10000"; // + "q=" +
+																// URLEncoder.encode(query,
 		// "UTF-8");
 		URL feedUrl = new URL(url);
 		log.debug("Feed URL: " + feedUrl);
@@ -400,7 +402,6 @@ public class Google {
 		log.debug("Google contacts count: " + result.size() + "/"
 				+ resultFeed.getTotalResults());
 		return result;
-
 	}
 
 	public List<Contact> getPimContacts(String query) throws IOException,
@@ -662,5 +663,12 @@ public class Google {
 		} else {
 			return null;
 		}
+	}
+
+	public ContactEntry updateContact(ContactEntry ce) throws IOException,
+			ServiceException {
+		URL editUrl = new URL(ce.getEditLink().getHref());
+		return service.update(editUrl, ce);
+
 	}
 }
