@@ -391,14 +391,21 @@ public class Google {
 	public List<ContactEntry> getGoogleContacts(String query)
 			throws IOException, ServiceException {
 
-		String url = feedUrlBase + "?" + "max-results=10000"; // + "q=" +
-																// URLEncoder.encode(query,
+		String url = feedUrlBase; // + "q=" +
+		// URLEncoder.encode(query,
 		// "UTF-8");
 		URL feedUrl = new URL(url);
 		log.debug("Feed URL: " + feedUrl);
 		ContactFeed resultFeed = service.getFeed(feedUrl, ContactFeed.class);
-		resultFeed.setTotalResults(5000);
+
 		List<ContactEntry> result = resultFeed.getEntries();
+		while ((resultFeed.getTotalResults() >= result.size())) {
+			log.debug("Result size: " + result.size());
+			resultFeed.setStartIndex(result.size());
+			feedUrl = new URL(url + "?start-index=" + result.size());
+			resultFeed = service.getFeed(feedUrl, ContactFeed.class);
+			result.addAll(resultFeed.getEntries());
+		}
 		log.debug("Google contacts count: " + result.size() + "/"
 				+ resultFeed.getTotalResults());
 		return result;

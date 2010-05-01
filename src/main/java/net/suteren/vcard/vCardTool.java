@@ -26,9 +26,16 @@ import net.wimpi.pim.contact.model.Contact;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gdata.data.BaseEntry;
 import com.google.gdata.data.PlainTextConstruct;
 import com.google.gdata.data.TextConstruct;
 import com.google.gdata.data.contacts.ContactEntry;
+import com.google.gdata.data.contacts.Nickname;
+import com.google.gdata.data.extensions.AdditionalName;
+import com.google.gdata.data.extensions.FamilyName;
+import com.google.gdata.data.extensions.FullName;
+import com.google.gdata.data.extensions.GivenName;
+import com.google.gdata.data.extensions.Name;
 import com.google.gdata.data.extensions.PhoneNumber;
 import com.google.gdata.util.AuthenticationException;
 import com.google.gdata.util.ServiceException;
@@ -71,38 +78,148 @@ public class vCardTool {
 
 		vCardTool vct = new vCardTool();
 
-		List<ContactEntry> entries = vct.getContactEntriesFromGoogle();
+		// vct.listGoogleContacts();
+
+		vct.upodate();
+	}
+
+	private void upodate() throws IOException, ServiceException {
+
+		List<ContactEntry> ce = g.getGoogleContacts("");
+		modifyGoogleContacts(ce);
+
+	}
+
+	private void listGoogleContacts() throws IOException, ServiceException {
+		List<ContactEntry> entries = getContactEntriesFromGoogle();
+		int cnt = 1;
 		for (ContactEntry ce : entries) {
+			Name name = ce.getName();
+			FamilyName family = null;
+			GivenName given = null;
+			AdditionalName middle = null;
+			FullName fullName = null;
+			if (name != null) {
+				family = name.getFamilyName();
+				given = name.getGivenName();
+				middle = name.getAdditionalName();
+				fullName = name.getFullName();
+			}
+			Nickname nick = ce.getNickname();
+			TextConstruct title = ce.getTitle();
+
+			log.info((cnt++) + ". # "
+					+ (family == null ? "FAMILY" : family.getValue()) + " # "
+					+ (given == null ? "GIVEN" : given.getValue()) + " # "
+					+ (middle == null ? "MIDDLE" : middle.getValue()) + " # "
+					+ (fullName == null ? "FULL" : fullName.getValue()) + " # "
+					+ (nick == null ? "NICK" : nick.getValue()) + " # "
+					+ (title == null ? "TITLE" : title.getPlainText()) + " # ");
+
+		}
+	}
+
+	private void modifyGoogleContacts(List<ContactEntry> entries)
+			throws IOException, ServiceException {
+		int cnt = 1;
+		for (ContactEntry ce : entries) {
+			String name = null;
 			boolean update = false;
-			URL etditUrl;
-			if (ce.getTitle() != null) {
+			if (ce.getTitle() == null) {
+				Name n = ce.getName();
+				if (n != null) {
+					FullName fn = n.getFullName();
+					if (fn != null) {
+						name = fn.getValue();
+					}
+				}
+			} else {
 				TextConstruct title = ce.getTitle();
-				String name = title.getPlainText();
-				if (name.matches(",.*,\\s*$")) {
-					name = name.replaceAll("\\s*,\\s*", " ");
-					name = name.trim();
-					update = true;
-				} else if (name.matches(",.*[^,]\\s*$")) {
-					String[] x = name.split(",", 2);
-					name = x[1] + " " + x[0];
+				name = title.getPlainText();
+			}
+			log.info((cnt++) + ". == " + name + " ==");
+
+			if (name.matches(".*,.*,\\s*")) {
+				name = name.replaceAll("\\s*,\\s*", " ");
+				name = name.trim();
+				update = true;
+			} else if (name.matches(".*,.*[^,]\\s*")) {
+				String[] x = name.split(",", 2);
+				name = x[1] + " " + x[0];
+				update = true;
+			}
+			if (update) {
+				log.warn("Updating TITLE " + ce.getTitle().getPlainText()
+						+ " to " + name);
+				ce.setTitle(new PlainTextConstruct(name));
+			}
+
+			Name gName = ce.getName();
+			if (gName != null) {
+
+				FullName fn = gName.getFullName();
+				if (fn != null) {
+					name = fn.getValue();
+
+					if (name.matches(".*,.*,\\s*")) {
+						name = name.replaceAll("\\s*,\\s*", " ");
+						name = name.trim();
+						update = true;
+					} else if (name.matches(".*,.*[^,]\\s*")) {
+						String[] x = name.split(",", 2);
+						name = x[1] + " " + x[0];
+						update = true;
+					}
+
+					if (update) {
+						log.warn("Updating FULLNAME "
+								+ ce.getTitle().getPlainText() + " to " + name);
+						fn.setValue(name);
+					}
+
+				}
+
+				GivenName given = gName.getGivenName();
+				FamilyName family = gName.getFamilyName();
+				if (given != null && family != null) {
+					if (given.getValue().matches(".*,")) {
+						if (family.getValue().matches(".*,")) {
+							log.warn("Swapping GIVEN and FAMILY "
+									+ given.getValue() + " "
+									+ family.getValue());
+							name = family.getValue();
+							family.setValue(given.getValue());
+							given.setValue(name);
+							update = true;
+						}
+					}
+				}
+
+				if (given != null && given.getValue().matches(".*,\\s*")) {
+					log.warn("Updating GIVEN " + given.getValue());
+
+					given.setValue(given.getValue().replaceAll(",\\s*", " ")
+							.trim());
 					update = true;
 				}
-				if (update) {
-					log.warn("Updating name " + ce.getTitle().getPlainText()
-							+ " to " + name);
-					ce.setTitle(new PlainTextConstruct(name));
+				if (family != null && family.getValue().matches(".*,\\s*")) {
+					log.warn("Updating FAMILY " + family.getValue());
+					family.setValue(family.getValue().replaceAll(",\\s*", " ")
+							.trim());
+					update = true;
 				}
 			}
+
 			List<PhoneNumber> pn = ce.getPhoneNumbers();
 			for (PhoneNumber p : pn) {
 				String n = p.getPhoneNumber();
 				n = n.trim();
 
-				if (n.matches("^420")) {
+				if (n.matches("^\\s*420(\\d|\\s)+")) {
 					n = "+" + n;
 				}
-				if (n.matches("^+?(\\d|\\s)+$")) {
-					n = n.replaceAll("\\s", "");
+				if (n.matches("^\\+?(\\d|\\s)+")) {
+					n = n.replaceAll("\\s+", "");
 				}
 				if (n != null && !n.equals(p.getPhoneNumber())) {
 					log.warn("Updating " + ce.getTitle().getPlainText()
@@ -112,12 +229,27 @@ public class vCardTool {
 				update = true;
 			}
 			if (update) {
-				vct.updateGoogleContact(ce);
-
+				boolean ok = true;
+				int rpt = 1;
+				do {
+					ok = true;
+					try {
+						updateGoogleContact(ce);
+					} catch (Exception e) {
+						ok = false;
+						log.warn("Update failed. Try " + rpt + ". ");
+						try {
+							Thread.sleep(3000);
+						} catch (InterruptedException e1) {
+						}
+					}
+				} while (!ok & rpt++ < 30);
+				if (!ok) {
+					log.error("Update entr failed!");
+				}
 			}
 
 		}
-
 	}
 
 	private char[] decodePassword(String password, String keyString)
